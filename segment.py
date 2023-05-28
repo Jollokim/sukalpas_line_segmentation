@@ -1,6 +1,7 @@
 import numpy as np
 import cv2 as cv
 
+from numba import njit, jit
 
 
 def get_simpel_horizontal_segmenting(chains: list[list[tuple]], threshold: int, strip_width: int):
@@ -38,7 +39,7 @@ def get_simpel_horizontal_segmenting(chains: list[list[tuple]], threshold: int, 
 
     return chains_corners
 
-
+@njit
 def is_end(carve: np.ndarray, n: int):
     for c in carve:
         if c != n:
@@ -47,12 +48,14 @@ def is_end(carve: np.ndarray, n: int):
         
     return True
 
-
+@jit(nopython=False)
 def line_segment(img: np.ndarray):
     carve = np.zeros(img.shape[1], dtype=int)
     carve_prev = np.zeros(img.shape[1], dtype=int)
 
     line_imgs = []
+
+
 
     while not is_end(carve, img.shape[0]-1):
         for c in range(len(carve)):

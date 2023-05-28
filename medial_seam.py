@@ -81,7 +81,7 @@ def one_dim_gausblur(strip_projections, kernel_size, sigma):
     
 
 @njit
-def get_maximas(persistence: list[tuple]):
+def get_maximas(persistence: list):
 
     maximas = []
     # collect maximas
@@ -92,8 +92,8 @@ def get_maximas(persistence: list[tuple]):
     # print(maximas)
     return maximas
 
-
-def get_minimas(persistence: list[tuple]):
+@njit
+def get_minimas(persistence: list):
 
     minimas = []
     # collect manimas

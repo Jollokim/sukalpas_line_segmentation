@@ -4,18 +4,24 @@ import cv2 as cv
 from utils import easify_persistence
 from scipy.ndimage.filters import convolve
 
+from numba import njit, jit
+
+from utils import is_grayscale
+
+
+
+
 
 # seam1 is the upper seam, seam2 is the lower seam
-def between_medial_seams(img: np.ndarray, seam1: list[tuple], seam2: list[tuple]):
-    seam1 = easify_persistence(seam1)
-    seam2 = easify_persistence(seam2)
+# @njit can't reflected list
+@jit
+def between_medial_seams(img: np.ndarray, seam1: list[int], seam2: list[int]):
 
     # previously, was lower min and upper max. For simplicity max.
     lower = np.max(seam1)
     upper = np.max(seam2)
 
     return img[lower:upper, :], (lower, upper)
-
 
 def calc_energy(img):
     # img = cv.cvtColor(img, cv.COLOR_GRAY2RGB)
@@ -52,31 +58,41 @@ def calc_energy(img):
     return energy_map
 
 
-def minimum_seam(img):
+def minimum_seam(img: np.ndarray):
     r, c = img.shape
     energy_map = calc_energy(img)
 
     M = energy_map.copy()
     backtrack = np.zeros_like(M, dtype=int)
 
-    for i in range(1, r):
-        for j in range(0, c):
-            # Handle the left edge of the image, to ensure we don't index -1
-            if j == 0:
-                idx = np.argmin(M[i - 1, j:j + 2])
-                backtrack[i, j] = idx + j
-                min_energy = M[i - 1, idx + j]
-            else:
-                idx = np.argmin(M[i - 1, j - 1:j + 2])
-                backtrack[i, j] = idx + j - 1
-                min_energy = M[i - 1, idx + j - 1]
+    @njit
+    def hard_work(r, c, backtrack, M):
+        for i in range(1, r):
+            for j in range(0, c):
+                # Handle the left edge of the image, to ensure we don't index -1
+                if j == 0:
+                    idx = np.argmin(M[i - 1, j:j + 2])
+                    backtrack[i, j] = idx + j
+                    min_energy = M[i - 1, idx + j]
+                else:
+                    idx = np.argmin(M[i - 1, j - 1:j + 2])
+                    backtrack[i, j] = idx + j - 1
+                    min_energy = M[i - 1, idx + j - 1]
 
-            M[i, j] += min_energy
+                M[i, j] += min_energy
+
+        return M, backtrack
+
+    M, backtrack = hard_work(r, c, backtrack, M)
 
     return M, backtrack
 
 
-def seam_carve(img, proj_img):
+
+
+def seam_carve(img, proj_img=None):
+    img = img.copy()
+
     r, c = img.shape
 
     M, backtrack = minimum_seam(img)
@@ -90,33 +106,43 @@ def seam_carve(img, proj_img):
     # last row of M
     j = np.argmin(M[-1])
 
-    for i in reversed(range(r)):
-        # Mark the pixels for deletion
-        mask[i, j] = False
-        j = backtrack[i, j]
+    # for i in reversed(range(r)):
+    #     # Mark the pixels for deletion
+    #     mask[i, j] = False
+    #     j = backtrack[i, j]
 
-    # Since the image has 3 channels, we convert our
-    # mask to 3D
-    # mask = np.stack([mask] * 3, axis=2)
+    order = [i for i in reversed(range(r))]
 
-    # print(mask.shape)
+    @njit
+    def hard_work(mask, j, order):
+        for i in order:
+            mask[i, j] = False
+            j = backtrack[i, j]
 
-    # draw the mask on the image
-    proj_img = cv.cvtColor(proj_img, cv.COLOR_GRAY2BGR)
+        return mask
 
-    for row in range(mask.shape[0]):
-        for col in range(mask.shape[1]):
-            if not mask[row, col]:
-                try: 
-                    proj_img[row, col] = [0, 0, 255]
-                    # proj_img[row+1, col] = [0, 0, 255]
-                    # proj_img[row-1, col] = [0, 0, 255]
-                except IndexError:
-                    pass
+    mask = hard_work(mask, j, order)
 
     # Delete all the pixels marked False in the mask,
     # and resize it to the new image dimensions
     # img = img[mask].reshape((r, c - 1))
 
-    return proj_img, mask
+    return mask
 
+@jit
+def get_total_carved(img: np.ndarray, carve_imgs: list[np.ndarray], row_intervals: list[tuple[int, int]]):
+    # concatenate subimages with carve projection to the original image
+    img = img.copy()
+
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
+    total_carved_img = img[0:row_intervals[0][0], :]
+
+    for i in range(0, len(carve_imgs)):
+        total_carved_img = cv.vconcat([total_carved_img, carve_imgs[i]])
+
+    total_carved_img = cv.vconcat(
+        [total_carved_img, img[row_intervals[-1][1]:img.shape[0], :]])
+    
+    return total_carved_img

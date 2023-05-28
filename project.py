@@ -1,11 +1,12 @@
 import cv2 as cv
 import numpy as np
-from utils import easify_persistence
+from utils import easify_persistence, is_grayscale
 
-from numba import njit
+from numba import njit, jit
 
 # @njit can't
-def project_horizontal_profiles_to_image(img: np.ndarray,
+@jit
+def project_hpp_strips_to_img(img: np.ndarray,
                                          hp_profiles: list[np.ndarray],
                                          strip_width,
                                          persistences=False):
@@ -41,7 +42,10 @@ def project_horizontal_profiles_to_image(img: np.ndarray,
 
 
 # @njit can't
+@jit
 def project_connected_peaks(img: np.ndarray, chained_peaks: list[list], strip_width: int):
+
+    img = img.copy()
 
     for chain in chained_peaks:
 
@@ -59,34 +63,34 @@ def project_connected_peaks(img: np.ndarray, chained_peaks: list[list], strip_wi
 
     return img
 
+# not in use anymore
+# def project_line_seg(line_segs: list[tuple[tuple]], img: np.ndarray):
 
-def project_line_seg(line_segs: list[tuple[tuple]], img: np.ndarray):
+#     # print(img.shape)
 
-    # print(img.shape)
+#     # clipping edges of line segs in case they go over bound
+#     for seg in line_segs:
+#         if seg[0][1] < 0:
+#             print(seg[0][1])
+#             seg[0][1] = 0
+#             seg[1][1] = 0
+#         if seg[2][1] > img.shape[0]-1:
+#             seg[2][1] = img.shape[0]-1
+#             seg[3][1] = img.shape[0]-1
 
-    # clipping edges of line segs in case they go over bound
-    for seg in line_segs:
-        if seg[0][1] < 0:
-            print(seg[0][1])
-            seg[0][1] = 0
-            seg[1][1] = 0
-        if seg[2][1] > img.shape[0]-1:
-            seg[2][1] = img.shape[0]-1
-            seg[3][1] = img.shape[0]-1
+#     # print(line_segs)
 
-    # print(line_segs)
+#     # draw lines
+#     for seg in line_segs:
+#         # vertical lines
+#         img = cv.line(img, seg[0], seg[1], color=[0, 0, 255], thickness=3)
+#         img = cv.line(img, seg[2], seg[3], color=[0, 0, 255], thickness=3)
 
-    # draw lines
-    for seg in line_segs:
-        # vertical lines
-        img = cv.line(img, seg[0], seg[1], color=[0, 0, 255], thickness=3)
-        img = cv.line(img, seg[2], seg[3], color=[0, 0, 255], thickness=3)
+#         # horizontal lines
+#         img = cv.line(img, seg[0], seg[2], color=[0, 0, 255], thickness=3)
+#         img = cv.line(img, seg[1], seg[3], color=[0, 0, 255], thickness=3)
 
-        # horizontal lines
-        img = cv.line(img, seg[0], seg[2], color=[0, 0, 255], thickness=3)
-        img = cv.line(img, seg[1], seg[3], color=[0, 0, 255], thickness=3)
-
-    return img
+#     return img
 
 
 def project_busy_zone(img: np.ndarray, high: int, low: int):
@@ -101,38 +105,86 @@ def project_busy_zone(img: np.ndarray, high: int, low: int):
     return img_color
 
 
-def project_vertical_projection_profile(img: np.ndarray, profile):
+def project_vertical_projection_profile(img: np.ndarray, profile: np.ndarray):
+    img = img.copy()
 
-    img_color = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
-    for i in range(len(profile)):
-        img_color[0:int(profile[i]), i] = [0, 0, 255]
+    profile = profile.astype(np.int64)
 
-    return img_color
+    # @njit
+    def hard_work(img, profile):
+        for i in range(len(profile)):
+            img[0:int(profile[i]), i] = [0, 0, 255]
+
+        return img, profile
+    
+    img, profile = hard_work(img, profile)
+
+    return img
 
 
 def project_horizontal_projection_profile(img: np.ndarray, profile):
+    img = img.copy()
 
-    img_color = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
-    for i in range(len(profile)):
-        img_color[i, 0:int(profile[i])] = [0, 0, 255]
+    # @njit
+    def hard_work(img, profile):
+        for i in range(len(profile)):
+            img[i, 0:int(profile[i])] = [0, 0, 255]
 
-    return img_color
+        return img, profile
+    
+    img, profile = hard_work(img, profile)
+
+    return img
 
 
 def project_minimas(img: np.ndarray, minimas):
-    minimas = easify_persistence(minimas)
+    img = img.copy()
 
-    if len(img.shape) == 2:
+    if is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
-    for i in range(len(minimas)):
-        try:
-            img[0:int(img.shape[0]), int(minimas[i])] = [255, 0, 0]
-            img[0:int(img.shape[0]), int(minimas[i])-1] = [255, 0, 0]
-            img[0:int(img.shape[0]), int(minimas[i])+1] = [255, 0, 0]
-        except IndexError:
-            pass
+    # @njit 
+    def hard_work(img, minimas):
+        for i in range(len(minimas)):
+            try:
+                img[0:int(img.shape[0]), int(minimas[i])] = [255, 0, 0]
+                img[0:int(img.shape[0]), int(minimas[i])-1] = [255, 0, 0]
+                img[0:int(img.shape[0]), int(minimas[i])+1] = [255, 0, 0]
+            except IndexError:
+                pass
+        
+        return img, minimas
+    
+    img, minimas = hard_work(img, minimas)
+
+    return img
+
+# @njit
+def project_carves(img: np.ndarray, mask: np.ndarray):
+    # draw the mask on the image
+
+    img = img.copy()
+
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
+    
+    img = hardwork_(img, mask)
+
+    return img
+
+@njit
+def hardwork_(img, mask):
+    for row in range(mask.shape[0]):
+        for col in range(mask.shape[1]):
+            if not mask[row, col]:
+                img[row, col] = [0, 0, 255]
+
 
     return img
