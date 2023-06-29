@@ -16,7 +16,7 @@ from persistence.use_persistence import get_persistence
 from project import *
 from seam_carve import *
 from segment import *
-from utils import easify_persistence
+from utils import easify_persistence, ceil_profile_with_threshold
 from word_carve import *
 
 warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
@@ -284,7 +284,7 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
 
             busy_zones.append(busy_zone)
 
-    # character segmentation with horizontal boundaries from vertical projection profile
+    # character segmentation with vertical projection profile
     vertical_multiplier = 7
 
     verti_filled_lst = []
@@ -295,24 +295,69 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
         # most_occ_gap_verti = find_most_occuring_gap_vertically(
         #     busy_zones[i]) * vertical_multiplier
         
-        most_occ_gap_verti = find_most_occuring_text_width_verti(
-            busy_zones[i]) * vertical_multiplier
+        # fill with most occuring text width vertically
+        # most_occ_gap_verti = find_most_occuring_text_width_verti(
+        #     busy_zones[i]) * vertical_multiplier
 
-        verti_filled = fill_this_gapsize_verti(
-            busy_zones[i], most_occ_gap_verti)
+        # verti_filled = fill_this_gapsize_verti(
+        #     busy_zones[i], most_occ_gap_verti)
+        # verti_filled_lst.append(verti_filled)
+
+        # fill connected component gaps
+        # verti_filled = verti_fill_with_ccmap(busy_zones[i])
+        # verti_filled_lst.append(verti_filled)
+
+        # vertical_profile = get_vertical_projection_profile(verti_filled)
+
+        # vertical_profile = ceil_profile_with_threshold(vertical_profile, int(busy_zones[i].shape[0] * 0.60), busy_zones[i].shape[0])
+
+        # vpp_lst.append(vertical_profile)
+
+
+        # fill with most occuring text width and thereafter height
+        most_occ_text_width_hori = find_most_occuring_text_width_hori(busy_zones[i]) * hori_multiplier
+
+        print(most_occ_text_width_hori)
+
+        hori_filled = fill_this_gapsize_hori(
+                busy_zones[i], most_occ_text_width_hori)
+        
+        cv.imwrite('horifill.png', hori_filled)
+
+        most_occ_text_width_verti = find_most_occuring_text_width_verti(hori_filled, True) * 2
+
+        print(most_occ_text_width_verti)
+
+        verti_filled = fill_this_gapsize_verti(busy_zones[i], most_occ_text_width_verti)
         verti_filled_lst.append(verti_filled)
 
         vertical_profile = get_vertical_projection_profile(verti_filled)
+        vertical_profile = ceil_profile_with_threshold(vertical_profile, int(busy_zones[i].shape[0] * 0.05), busy_zones[i].shape[0])
+
         vpp_lst.append(vertical_profile)
 
-    # smooth projection profile with 1-dim gaussian
-    vpp_lst = one_dim_gausblur(vpp_lst, 3, 3)
 
-    # # Find peaks in strips histogram projection
+    # smooth projection profile with 1-dim gaussian
+    # vpp_lst = one_dim_gausblur(vpp_lst, 3, 3)
+
+
+
+    
+    # create minimas from the ceiled profile
+    current_minimas = []
+    for i in range(len(vpp_lst)):
+        minimas = get_minimas_from_ceiled_pp(vpp_lst[i], busy_zones[i].shape[0])
+
+        current_minimas.append(minimas)
+
+        # quit()
+
+
+    # # # Find peaks in strips histogram projection
     # persistences_vertical = []
     # persistence_vertical = 5
 
-    # # collect extremas from projection profile in strip (both min and max), with over persistence
+    # collect extremas from projection profile in strip (both min and max), with over persistence
     # for i in range(len(vpp_lst)):
     #     persistence = get_persistence(
     #         vpp_lst[i], persistence_vertical)
@@ -332,8 +377,8 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
 
     # # find mean gap
     # mean_gaps = []
-    # for i in range(len(busy_zones)):
-    #     mean_gap = find_mean_gap_vertically(busy_zones[i])
+    # for i in range(len(verti_filled_lst)):
+    #     mean_gap = find_mean_gap_vertically(verti_filled_lst[i])
     #     mean_gaps.append(mean_gap)
 
     # # print('Mean gaps:', mean_gaps)
@@ -358,14 +403,13 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
     # print(current_minimas)
 
     # Find peaks in strips histogram projection, 10% of image height sets
+    # current_minimas = []
 
-    current_minimas = []
-
-    for i in range(len(busy_zones)):
-        minimas = get_splitting_points_with_vpp_percentage(busy_zones[i], vpp_lst[i])
-        current_minimas.append(minimas)
+    # for i in range(len(busy_zones)):
+    #     minimas = get_splitting_points_with_vpp_percentage(busy_zones[i], vpp_lst[i])
+    #     current_minimas.append(minimas)
         
-    print(current_minimas)
+    # print(current_minimas)
 
     # carve the chars from the minimas
     carved_chars_per_word = []

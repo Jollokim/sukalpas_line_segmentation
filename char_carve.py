@@ -155,20 +155,26 @@ def hard_work_find_most_occuring_text_width_hori(thresh: np.ndarray, width_count
 
                     pixel_detected = -1
 
+        if pixel_detected != -1:
+                width = row - pixel_detected
+
+                width_count[width] += 1
+
     return thresh, width_count
 
 
-def find_most_occuring_text_width_verti(img: np.ndarray):
+def find_most_occuring_text_width_verti(img: np.ndarray, binary=False):
     if not is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    ret, thresh = cv.threshold(
-        img, 150, 255, cv.THRESH_BINARY_INV)  # thresholding
+    if not binary:
+        ret, img = cv.threshold(
+            img, 150, 255, cv.THRESH_BINARY_INV)  # thresholding
     
-    width_count = np.zeros(thresh.shape[1], dtype=int)
+    width_count = np.zeros(img.shape[1], dtype=int)
 
-    thresh, width_count = hard_work_find_most_occuring_text_width_verti(
-        thresh, width_count)
+    img, width_count = hard_work_find_most_occuring_text_width_verti(
+        img, width_count)
 
     most_occ_width = np.argmax(width_count)
 
@@ -191,6 +197,11 @@ def hard_work_find_most_occuring_text_width_verti(thresh: np.ndarray, width_coun
                     width_count[width] += 1
 
                     pixel_detected = -1
+
+        if pixel_detected != -1:
+                    width = row - pixel_detected
+
+                    width_count[width] += 1
 
     return thresh, width_count
 
@@ -281,8 +292,10 @@ def find_most_occuring_gap_vertically(img: np.ndarray):
 def find_mean_gap_vertically(img: np.ndarray):
     # cv.imwrite('busy_trouble_meangap.png', img)
 
-    ret, thresh = cv.threshold(
-        img, 150, 255, cv.THRESH_BINARY_INV)  # thresholding
+    # ret, thresh = cv.threshold(
+    #     img, 150, 255, cv.THRESH_BINARY_INV)  # thresholding
+
+    thresh = img
 
     gap_count = np.zeros(thresh.shape[0], dtype=int)
 
@@ -490,12 +503,12 @@ def carve_chars(img: np.ndarray, minimas: list, threshold: int):
     # cv.imwrite('busy_trouble.png', img)
 
     # clip edges of minimas
-    if len(minimas) > 0:
-        if minimas[0] <= threshold:
-            del minimas[0]
-    if len(minimas) > 0:
-        if minimas[-1] >= img.shape[1]-threshold:
-            del minimas[-1]
+    # if len(minimas) > 0:
+    #     if minimas[0] <= threshold:
+    #         del minimas[0]
+    # if len(minimas) > 0:
+    #     if minimas[-1] >= img.shape[1]-threshold:
+    #         del minimas[-1]
 
     carved_chars = []
 
@@ -503,18 +516,9 @@ def carve_chars(img: np.ndarray, minimas: list, threshold: int):
         carved_chars.append(img)
         return carved_chars
 
-    for i in range(len(minimas)+1):
-        if i == 0:
+    for i in range(len(minimas)-1):
             carved_chars.append(
-                img[:, 0:minimas[i]]
-            )
-        elif i == len(minimas):
-            carved_chars.append(
-                img[:, minimas[i-1]:img.shape[1]]
-            )
-        else:
-            carved_chars.append(
-                img[:, minimas[i-1]:minimas[i]]
+                img[:, minimas[i]:minimas[i+1]]
             )
 
     return carved_chars
@@ -524,12 +528,116 @@ def get_splitting_points_with_vpp_percentage(img: np.ndarray, vpp: np.ndarray, p
     
     minimas = []
 
+    
+    # threshold given as some percentage of height of image
     threshold = int(img.shape[0] * perc)
 
+    has_seen_over_thresh = False
+
+    minimas.append(0)
     for i in range(len(vpp)):
-        if vpp[i] <= threshold:
-            minimas.append(i)
+        if has_seen_over_thresh:
+            if vpp[i] <= threshold:
+                minimas.append(i)
+                has_seen_over_thresh = False
+        else:
+            if vpp[i] > threshold:
+                has_seen_over_thresh = True
+
+    if has_seen_over_thresh:
+        minimas.append(len(vpp)-1)
 
     minimas = np.array(minimas)
 
     return minimas
+
+
+def verti_fill_with_ccmap(img: np.ndarray):
+    ret, thresh = cv.threshold(
+        img, 150, 255, cv.THRESH_BINARY_INV)  # thresholding
+    
+    n_cc, ccmap = cv.connectedComponents(thresh, connectivity=8)
+
+    thresh, ccmap = hard_work_verti_fill_with_ccmap(thresh, ccmap)
+
+    return thresh
+
+@njit
+def hard_work_verti_fill_with_ccmap(thresh: np.ndarray, ccmap: np.ndarray):
+    for col in range(ccmap.shape[1]):
+        # contains [cc, row]
+        detected = []
+
+        for row in range(ccmap.shape[0]):
+            if ccmap[row, col] != 0:
+                exist_in = False
+
+                for i in range(len(detected)):
+                    if ccmap[row, col] == detected[i][0]:
+                        thresh[detected[i][1]:row, col] = 255
+                        
+                        detected[i][1] = row
+
+                        exist_in = True
+
+                        break
+
+                if not exist_in:
+                    detected.append([ccmap[row, col], row])
+                
+    return thresh, ccmap
+
+
+@njit
+def get_minimas_from_ceiled_pp(pp: np.ndarray, max: int):
+    search_start = -1
+    search_end = -1
+
+    minimas = []
+
+    print(max)
+
+
+    for i in range(len(pp)):
+        if pp[i] < max:
+            if search_start == search_end:
+                search_start = i
+                print('new search start', search_start)
+            # elif pp[i+1] < max:
+            #     continue
+        else:
+            if search_start == search_end:
+                continue
+
+            search_end = i
+
+            if search_start == 0 or search_end == len(pp)-1:
+                if search_start == 0:
+                    minimas.append(search_start)
+                    print('mini start, search area:', search_start, search_end)
+                if search_end == len(pp)-1:
+                    minimas.append(search_end)
+                    print('mini end, search area:', search_start, search_end)
+
+
+                search_start = search_end
+
+                continue
+
+            mini = np.argmin(pp[search_start:search_end]) + search_start
+            print(f'mini index {mini}, search area:', search_start, search_end)
+
+            minimas.append(mini)
+
+            search_start = search_end
+
+    if 0 not in minimas:
+        minimas.insert(0, 0)
+    if len(pp)-1 not in minimas:
+        minimas.append(len(pp)-1)
+
+    print(minimas)
+
+    return minimas
+
+        

@@ -149,13 +149,14 @@ def project_minimas(img: np.ndarray, minimas):
     if is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
+
     # @njit 
     def hard_work(img, minimas):
         for i in range(len(minimas)):
             try:
                 img[0:int(img.shape[0]), int(minimas[i])] = [255, 0, 0]
-                img[0:int(img.shape[0]), int(minimas[i])-1] = [255, 0, 0]
-                img[0:int(img.shape[0]), int(minimas[i])+1] = [255, 0, 0]
+                # img[0:int(img.shape[0]), int(minimas[i])-1] = [255, 0, 0]
+                # img[0:int(img.shape[0]), int(minimas[i])+1] = [255, 0, 0]
             except IndexError:
                 pass
         

@@ -15,13 +15,27 @@ def easify_persistence(l: list[tuple]):
 
     return l_n
 
+
 @njit
 def is_grayscale(img: np.ndarray):
     if len(img.shape) == 2:
         return True
     return False
 
+
 @njit
 def is_grayscale_essential(img: np.ndarray):
     if not is_grayscale(img):
         raise Exception('Image is not grayscale!')
+    
+
+@njit
+def ceil_profile_with_threshold(profile: np.ndarray, threshold: int, ceil: int):
+    for i in range(len(profile)):
+        if profile[i] >= threshold:
+            profile[i] = ceil
+
+            
+
+    return profile
+    
