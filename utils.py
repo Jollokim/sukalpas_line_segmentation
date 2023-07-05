@@ -38,4 +38,6 @@ def ceil_profile_with_threshold(profile: np.ndarray, threshold: int, ceil: int):
             
 
     return profile
-    
+
+
+# a utility function which would check the image is of the correct dtype would also be nice!

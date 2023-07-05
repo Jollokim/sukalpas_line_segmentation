@@ -227,28 +227,33 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
         Revisit the filtering method.
     """
 
-    words_per_line_lst = []
+    per_line_word_segs = []
+    per_line_whitespace_segs = [] # NOTE: can maybe be remove later
+
+    word_segments_per_line = []
 
     # carve words from lines
     for i in range(len(lineseg_lst)):
-        words_in_line = carve_word_img(lineseg_lst[i])
+        word_segs, whitespace_segs = carve_word_whitespace_segs(lineseg_lst[i])
 
-        words_per_line_lst.append(words_in_line)
+        per_line_word_segs.append(word_segs)
+        per_line_whitespace_segs.append(whitespace_segs)
 
-    # Projections
+        word_seg_for_line = carve_word_img_with_seg(lineseg_lst[i], word_segs)
+        word_segments_per_line.append(word_seg_for_line)
 
-    # write word image related words
-    log.create_subdir('word_segments')
-    log.set_subdir('word_segments')
+    # crop with horizontal fill and connected component analysis
+    word_segments_cropped_per_line = []
+    for line in range(len(word_segments_per_line)):
+        word_segments_cropped_per_line.append([])
 
-    for line in range(len(words_per_line_lst)):
-        for word in range(len(words_per_line_lst[line])):
-            log.write_img(words_per_line_lst[line]
-                        [word], f'word_l{line}w{word}')
+        for word in range(len(word_segments_per_line[line])):
+            # trouble in this function
+            cropped, _, __ = cropp_with_cca(word_segments_per_line[line][word])
 
-    
-    
-    # character segmentation
+            word_segments_cropped_per_line[line].append(cropped)
+
+
     # busy zone generation
     hori_multiplier = 10
 
@@ -258,31 +263,138 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
     hori_filled_lst = []
     hori_filled_hpp_lst = []
 
-    for line in range(len(words_per_line_lst)):
-        for word in range(len(words_per_line_lst[line])):
-            # Connected component
-            # busy_zone_cc, high, low = carve_busy_zone_cc(total_word_img_lst[word_img])
+    for line in range(len(per_line_word_segs)):
+        busy_zones.append([])
+        hori_filled_lst.append([])
+        hori_filled_hpp_lst.append([])
 
-            # hpp busy zones
-            # most_occ_gap_hori = find_most_occuring_gap_horizontal(
-            #     words_per_line_lst[line][word]) * hori_multiplier
-            
+        for word in range(len(per_line_word_segs[line])):
             most_occ_gap_hori = find_most_occuring_text_width_hori(
-                words_per_line_lst[line][word]) * hori_multiplier
+                word_segments_cropped_per_line[line][word]) * hori_multiplier
 
             # horizontal fill
-            # hori_filled = fill_this_gapsize_hori(words_per_line_lst[line][word], words_per_line_lst[line][word].shape[1]) # fill all horizontal gaps
             hori_filled = fill_this_gapsize_hori(
-                words_per_line_lst[line][word], most_occ_gap_hori)
-            hori_filled_lst.append(hori_filled)
+                word_segments_cropped_per_line[line][word], most_occ_gap_hori)
+            hori_filled_lst[line].append(hori_filled)
 
             hori_filled_hpp = get_horizontal_projection_profile(hori_filled)
-            hori_filled_hpp_lst.append(hori_filled_hpp)
+            hori_filled_hpp_lst[line].append(hori_filled_hpp)
 
             busy_zone, high, low = carve_busy_zone_hp(
-                words_per_line_lst[line][word], hori_filled_hpp)
+                word_segments_cropped_per_line[line][word], hori_filled_hpp)
 
-            busy_zones.append(busy_zone)
+            busy_zones[line].append(busy_zone)
+
+
+
+    # Projections
+    if log_intermediates:
+        # line image projected with the splitting points
+        segs_projected_on_line = []
+        for i in range(len(lineseg_lst)): 
+            projected_seg = project_segments_on_line(lineseg_lst[i], per_line_word_segs[i])
+            segs_projected_on_line.append(projected_seg)
+
+        # hori filled with hpp projection
+        hori_filled_hpp_on_hori_filled_lst = []
+        for line in range(len(hori_filled_lst)):
+            hori_filled_hpp_on_hori_filled_lst.append([])
+            for word in range(len(hori_filled_lst[line])):
+                hori_filled_hpp_on_hori_filled_lst[line].append(
+                    project_horizontal_projection_profile(hori_filled_lst[line][word], hori_filled_hpp_lst[line][word]))
+                
+        # side by side hpp image for busy and cropped
+        side_by_side_busy_hpp_lst = []
+        side_by_side_crop_hpp_lst = []
+        for line in range(len(busy_zones)):
+            side_by_side_busy_hpp_lst.append([])
+            side_by_side_crop_hpp_lst.append([])
+            for word in range(len(busy_zones[line])):
+                
+                # some preprocess before hpp
+                busy_zone = busy_zones[line][word].astype(np.uint8)
+                busy_zone = cv.cvtColor(busy_zone, cv.COLOR_BGR2GRAY)
+
+                crop = word_segments_cropped_per_line[line][word].astype(np.uint8)
+                crop = cv.cvtColor(crop, cv.COLOR_BGR2GRAY)
+
+                # threshold then get hpp
+                ret, thresh_busy = cv.threshold(busy_zone, 150, 255, cv.THRESH_BINARY_INV)
+                hpp_busy = get_horizontal_projection_profile(thresh_busy)
+
+                ret, thresh_crop = cv.threshold(crop, 150, 255, cv.THRESH_BINARY_INV)
+                hpp_crop = get_horizontal_projection_profile(thresh_crop)
+
+                sbs_busy = project_hpp_side_by_side_image(busy_zone, hpp_busy)
+                sbs_crop = project_hpp_side_by_side_image(crop, hpp_crop)
+
+                # add to list
+                side_by_side_busy_hpp_lst[line].append(sbs_busy)
+                side_by_side_crop_hpp_lst[line].append(sbs_crop)
+
+
+                
+
+
+    # write word image related words
+    log.create_subdir('word_segments/projected_segs_on_line')
+    log.set_subdir('word_segments/projected_segs_on_line')
+    for i in range(len(segs_projected_on_line)):   
+        log.write_img(segs_projected_on_line[i], f'projected_segs{i}')
+
+    log.create_subdir('word_segments/uncropped_wordsegments')
+    log.set_subdir('word_segments/uncropped_wordsegments')
+    for line in range(len(word_segments_per_line)):
+        for word in range(len(word_segments_per_line[line])):
+            log.write_img(word_segments_per_line[line][word], f'line{line}word{word}')
+
+    log.create_subdir('word_segments/cropped_wordsegments')
+    log.set_subdir('word_segments/cropped_wordsegments')
+    for line in range(len(word_segments_cropped_per_line)):
+        for word in range(len(word_segments_cropped_per_line[line])):
+            log.write_img(word_segments_cropped_per_line[line][word], f'line{line}word{word}')
+
+
+    log.create_subdir('word_segments/hori_fill_for_busy_zone')
+    log.set_subdir('word_segments/hori_fill_for_busy_zone')
+    for line in range(len(hori_filled_lst)):
+        for word in range(len(hori_filled_lst[line])):
+            log.write_img(hori_filled_lst[line][word], f'line{line}word{word}')
+
+
+    log.create_subdir('word_segments/hori_fill_for_busy_zone_with_hpp')
+    log.set_subdir('word_segments/hori_fill_for_busy_zone_with_hpp')
+    for line in range(len(hori_filled_hpp_on_hori_filled_lst)):
+        for word in range(len(hori_filled_hpp_on_hori_filled_lst[line])):
+            log.write_img(hori_filled_hpp_on_hori_filled_lst[line][word], f'line{line}word{word}')
+    
+
+    log.create_subdir('word_segments/busy_zones')
+    log.set_subdir('word_segments/busy_zones')
+    for line in range(len(busy_zones)):
+        for word in range(len(busy_zones[line])):
+            log.write_img(busy_zones[line][word], f'line{line}word{word}')
+
+    log.create_subdir('word_segments/busy_zone_sbs_hpp')
+    log.set_subdir('word_segments/busy_zone_sbs_hpp')
+    for line in range(len(side_by_side_busy_hpp_lst)):
+        for word in range(len(side_by_side_busy_hpp_lst[line])):
+            log.write_img(side_by_side_busy_hpp_lst[line][word], f'line{line}word{word}')    
+
+    log.create_subdir('word_segments/cropped_sbs_hpp')
+    log.set_subdir('word_segments/cropped_sbs_hpp')
+
+    for line in range(len(side_by_side_crop_hpp_lst)):
+        for word in range(len(side_by_side_crop_hpp_lst[line])):
+            log.write_img(side_by_side_crop_hpp_lst[line][word], f'line{line}word{word}')
+
+            
+    quit()
+
+    
+    
+    # character segmentation
+    
 
     # character segmentation with vertical projection profile
     vertical_multiplier = 7
@@ -420,10 +532,10 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
 
     # Projections
     if log_intermediates:
-        hori_filled_hpp_on_hori_filled_lst = []
-        for i in range(len(hori_filled_lst)):
-            hori_filled_hpp_on_hori_filled_lst.append(
-                project_horizontal_projection_profile(hori_filled_lst[i], hori_filled_hpp_lst[i]))
+        # hori_filled_hpp_on_hori_filled_lst = []
+        # for i in range(len(hori_filled_lst)):
+        #     hori_filled_hpp_on_hori_filled_lst.append(
+        #         project_horizontal_projection_profile(hori_filled_lst[i], hori_filled_hpp_lst[i]))
 
         verti_filled_vpp_on_verti_filled_lst = []
         for i in range(len(verti_filled_lst)):

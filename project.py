@@ -5,11 +5,13 @@ from utils import easify_persistence, is_grayscale
 from numba import njit, jit
 
 # @njit can't
+
+
 @jit
 def project_hpp_strips_to_img(img: np.ndarray,
-                                         hp_profiles: list[np.ndarray],
-                                         strip_width,
-                                         persistences=False):
+                              hp_profiles: list[np.ndarray],
+                              strip_width,
+                              persistences=False):
 
     img = img.copy()
 
@@ -119,13 +121,13 @@ def project_vertical_projection_profile(img: np.ndarray, profile: np.ndarray):
             img[0:int(profile[i]), i] = [0, 0, 255]
 
         return img, profile
-    
+
     img, profile = hard_work(img, profile)
 
     return img
 
 
-def project_horizontal_projection_profile(img: np.ndarray, profile):
+def project_horizontal_projection_profile(img: np.ndarray, profile: np.ndarray):
     img = img.copy()
 
     if is_grayscale(img):
@@ -137,7 +139,7 @@ def project_horizontal_projection_profile(img: np.ndarray, profile):
             img[i, 0:int(profile[i])] = [0, 0, 255]
 
         return img, profile
-    
+
     img, profile = hard_work(img, profile)
 
     return img
@@ -149,8 +151,8 @@ def project_minimas(img: np.ndarray, minimas):
     if is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
+    # @njit
 
-    # @njit 
     def hard_work(img, minimas):
         for i in range(len(minimas)):
             try:
@@ -159,14 +161,16 @@ def project_minimas(img: np.ndarray, minimas):
                 # img[0:int(img.shape[0]), int(minimas[i])+1] = [255, 0, 0]
             except IndexError:
                 pass
-        
+
         return img, minimas
-    
+
     img, minimas = hard_work(img, minimas)
 
     return img
 
 # @njit
+
+
 def project_carves(img: np.ndarray, mask: np.ndarray):
     # draw the mask on the image
 
@@ -175,10 +179,10 @@ def project_carves(img: np.ndarray, mask: np.ndarray):
     if is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
 
-    
     img = hardwork_(img, mask)
 
     return img
+
 
 @njit
 def hardwork_(img, mask):
@@ -187,5 +191,37 @@ def hardwork_(img, mask):
             if not mask[row, col]:
                 img[row, col] = [0, 0, 255]
 
+    return img
+
+
+def project_segments_on_line(img: np.ndarray, segs: list[list[int, int]]):
+    img = img.copy()
+
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
+    img = img.astype('uint8')
+
+    for seg in segs:
+        img = cv.line(img, (seg[0], 0),
+                      (seg[0], img.shape[0]-1), color=[0, 0, 255])
+        img = cv.line(img, (seg[1], 0),
+                      (seg[1], img.shape[0]-1), color=[0, 0, 255])
 
     return img
+
+
+def project_hpp_side_by_side_image(img: np.ndarray, hpp: np.ndarray):
+
+    img = img.copy()
+
+    if is_grayscale(img):
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
+    hpp_img = np.full(img.shape, 255)
+
+    hpp_img = project_horizontal_projection_profile(hpp_img, hpp).astype(np.uint8)
+
+    sbs = cv.hconcat([img, hpp_img])
+
+    return sbs

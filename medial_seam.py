@@ -29,7 +29,7 @@ def get_strips(img: np.ndarray, n_strips: int):
     return strips
 
 
-@njit
+# @njit
 def get_strips_hpp(strips: list[np.ndarray]):
     hp_profiles = []
 
@@ -41,8 +41,12 @@ def get_strips_hpp(strips: list[np.ndarray]):
     return hp_profiles
 
 
-@njit
+# @njit
 def get_horizontal_projection_profile(img: np.ndarray):
+    # img = img.astype(np.uint8)
+
+    # print(img.shape)
+
     is_grayscale_essential(img)
 
     img = img.copy()

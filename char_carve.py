@@ -66,7 +66,7 @@ from utils import is_grayscale
 #     return thresh
 
 
-@njit
+# @njit
 def carve_busy_zone_hp(img: np.ndarray, hpp: np.ndarray):
 
     max_row = np.argmax(hpp)
@@ -85,15 +85,18 @@ def carve_busy_zone_hp(img: np.ndarray, hpp: np.ndarray):
             lower_bound = i
             break
 
-    busy_zone = img[upper_bound:lower_bound, :]
-
-    # cv.imwrite('5.png', busy_zone)
+    if upper_bound == lower_bound:
+        busy_zone = img
+    else:    
+        busy_zone = img[upper_bound:lower_bound, :]
 
     return busy_zone, upper_bound, lower_bound
 
 
-@jit
+# @jit
 def fill_this_gapsize_hori(img: np.ndarray, gap: int):
+    img = img.astype(np.uint8)
+
     if not is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
@@ -121,6 +124,7 @@ def fill_this_gapsize_hori(img: np.ndarray, gap: int):
 
 
 def find_most_occuring_text_width_hori(img: np.ndarray):
+    img = img.astype(np.uint8)
 
     if not is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
