@@ -76,7 +76,7 @@ def carve_word_img(img: np.ndarray):
     return word_img_lst
 
 
-def get_seg_len(seg: list[int, int]):
+def get_seg_width(seg: list[int, int]):
     return seg[1]-seg[0]
 
 
@@ -84,15 +84,16 @@ def concat_lesser_into(words_segs: list[list[int, int]], whitespace_segs: list[l
     i = 0
     
     while(i < len(words_segs)):
-        if get_seg_len(words_segs[i]) <= threshold:
+        if get_seg_width(words_segs[i]) <= threshold:
             start = words_segs[i][0]
 
             for k in range(len(whitespace_segs)):
-                if whitespace_segs[k][1] == start:
-                    whitespace_segs[k][1] = whitespace_segs[k+1][1]
+                if whitespace_segs[k][1] == start:                    
+                    if not (k+1) >= len(whitespace_segs):
+                        whitespace_segs[k][1] = whitespace_segs[k+1][1]
 
-                    del whitespace_segs[k+1]
-                    break
+                        del whitespace_segs[k+1]
+                        break
             
             del words_segs[i]
             continue
