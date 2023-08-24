@@ -187,7 +187,7 @@ def carve_word_img_with_seg(img: np.ndarray, word_segs: list[list[int, int]], wh
 
 # Old technique (carve_busy_zone_cc() from char_carve.py)
 # NOTE: optimize hard work
-def cropp_with_cca(img: np.ndarray):
+def crop_with_cca(img: np.ndarray):
     thresh_fillgaps = fill_horizontal_gaps(img)
 
     n_cc, labels = cv.connectedComponents(thresh_fillgaps, connectivity=8)

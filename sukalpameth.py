@@ -16,7 +16,7 @@ from persistence.use_persistence import get_persistence
 from project import *
 from seam_carve import *
 from segment import *
-from utils import easify_persistence, ceil_profile_with_threshold
+from utils import easify_persistence, ceil_profile_with_threshold, clearout_0_shapes
 from word_carve import *
 
 warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
@@ -249,10 +249,19 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
 
         for word in range(len(word_segments_per_line[line])):
             # trouble in this function
-            cropped, _, __ = cropp_with_cca(word_segments_per_line[line][word])
+            cropped, _, __ = crop_with_cca(word_segments_per_line[line][word])
 
             word_segments_cropped_per_line[line].append(cropped)
 
+            if word_segments_cropped_per_line[line][word].shape == (0, 6, 3):
+                print('present')
+                print('made from:', word_segments_per_line[line][word].shape)
+                print('line', line, 'word', word)
+                cv.imwrite('test.png', word_segments_per_line[line][word])
+
+                quit()
+
+    word_segments_cropped_per_line = clearout_0_shapes(word_segments_cropped_per_line)
 
     # busy zone generation
     hori_multiplier = 10
@@ -389,7 +398,7 @@ def sukalpameth(img: np.ndarray, write_path: str, log_intermediates=True):
             log.write_img(side_by_side_crop_hpp_lst[line][word], f'line{line}word{word}')
 
             
-    quit()
+    return
 
     
     
@@ -934,15 +943,16 @@ def test_on_all_images(img_folder: str, write_path: str):
         # sukalpameth(img, out_path)
 
         try:
-            sukalpameth(img, out_path)
             print(f'{img_folder}/{img_name}')
+            sukalpameth(img, out_path)
         except:
             print(f'SOMETHING went wrong with:\n {img_folder}/{img_name}')
             break
 
 
 def main():
-    img = cv.imread('data/Bangla-writer-test-convert/test_001.png')
+    # img = cv.imread('data/Bangla-writer-test-convert/test_001.png')
+    img = cv.imread('data/Bangla-writer-test-convert/test_235.png')
     # img = cv.imread('data/Bangla-writer-train-convert/train_145.png')
     # img = cv.imread('data/Bangla-writer-test-convert/test_322.png')
     # img = cv.imread('data/Bangla-writer-train-convert/train_153.png')
@@ -952,20 +962,20 @@ def main():
     # img = cv.imread('data/Bangla-writer-train-convert/train_231.png')
 
     # sukalpameth(img, 'hpp_busyzones')
-    # sukalpameth(img, 'sukalpameth')
+    sukalpameth(img, 'sukalpameth')
 
-    start = time.time()
-    sukalpameth(img, 'sukalpameth', True)
-    end = time.time()
-    print("Elapsed (with compilation) = %s" % (end - start))
+    # start = time.time()
+    # sukalpameth(img, 'sukalpameth', True)
+    # end = time.time()
+    # print("Elapsed (with compilation) = %s" % (end - start))
 
-    start = time.time()
-    sukalpameth(img, 'sukalpameth', True)
-    end = time.time()
-    print("Elapsed (after compilation) = %s" % (end - start))
+    # start = time.time()
+    # sukalpameth(img, 'sukalpameth', True)
+    # end = time.time()
+    # print("Elapsed (after compilation) = %s" % (end - start))
 
-    # test_on_all_images('data/Bangla-writer-train-convert', 'segmented_data_char/train')
-    # test_on_all_images('data/Bangla-writer-test-convert', 'segmented_data_char/test')
+    # test_on_all_images('data/Bangla-writer-train-convert', 'segmented_data_wordlevel/train')
+    # test_on_all_images('data/Bangla-writer-test-convert', 'segmented_data_wordlevel/test')
     # test_on_all_images('data/Bangla-writer-test-convert')
 
 

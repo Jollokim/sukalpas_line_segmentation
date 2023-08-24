@@ -126,6 +126,9 @@ def fill_this_gapsize_hori(img: np.ndarray, gap: int):
 def find_most_occuring_text_width_hori(img: np.ndarray):
     img = img.astype(np.uint8)
 
+    print(img.shape)
+    print(img)
+
     if not is_grayscale(img):
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 

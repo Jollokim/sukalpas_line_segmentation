@@ -4,6 +4,9 @@ sukalpameth/
 cc_busyzones/
 hpp_busyzones/
 test.py
+thresh.png
+cut*.png
+*.out
 
 # venv
 venv/
